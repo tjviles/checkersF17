@@ -1,10 +1,4 @@
 // checkers.js
-const readline = require('readline');
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
 
 /** The state of the game */
 var state = {
@@ -21,7 +15,8 @@ var state = {
     ['b',null,'b',null,'b',null,'b',null,'b',null],
     [null,'b',null,'b',null,'b',null,'b',null,'b'],
     ['b',null,'b',null,'b',null,'b',null,'b',null]
-  ]
+  ],
+  captures: {w: 0, b: 0}
 }
 
 /** @function getLegalMoves
@@ -165,6 +160,8 @@ function applyMove(x, y, move) {
     state.board[y][x] = null;
   } else {
     move.captures.forEach(function(square){
+      var piece = state.board[square.y][square.x];
+      state.captures[piece.substring(0,1)]++;
       state.board[square.y][square.x] = null;
     });
     var index = move.landings.length - 1;
@@ -181,23 +178,11 @@ function applyMove(x, y, move) {
   * has yet won.
   */
 function checkForVictory() {
-  var wCount = 0;
-  var bCount = 0;
-  for(y = 0; y < 10; y++) {
-    for(x = 0; x < 10; x++) {
-      if(state.board[y][x] === "w" || state.board[y][x] === "wk") {
-        wCount++;
-      }
-      if(state.board[y][x] === "b" || state.board[y][x] === "bk") {
-        bCount++;
-      }
-    }
-  }
-  if(wCount == 0) {
+  if(state.captures.w == 20) {
     state.over = true;
     return 'black wins';
   }
-  if(bCount == 0) {
+  if(state.captures.b == 20) {
     state.over = true;
     return 'white wins';
   }
@@ -213,92 +198,51 @@ function nextTurn() {
   else state.turn = 'b';
 }
 
-/** @function printBoard
-  * Prints the current state of the game board
-  * to the console.
-  */
-function printBoard() {
-  console.log("   a b c d e f g h i j");
-  state.board.forEach(function(row, index){
-    var ascii = row.map(function(square){
-      if(!square) return '_';
-      else return square;
-    }).join('|');
-    console.log(index, ascii);
-  });
-  console.log('\n');
+function handleCheckerClick(event){
+  event.preventDefault();
+  var parentId = event.target.parentElement.id;
+  var x = parseInt(parentId.charAt(7));
+  var y = parseInt(parentId.charAt(9));
+  var moves = getLegalMoves(state.board[y][x], x, y);
+  var current;
+  if (moves){
+    //highlight all the move squares with css div
+    for(var j = 0; j < moves.length; j++){
+      current = document.getElementById("square-" + moves[j].x + "-" + moves[j].y);
+      current.classList.add('move-highlight');
+    }
+    //remove the highlight after 3 seconds
+    setTimeout(function(){
+      moves.forEach(function(move){
+        current = document.getElementById("square-" + move.x + "-" + move.y);
+        current.classList.remove('move-highlight');
+      })
+    }, 3000);
+  }
+  console.log(x + "," + y)
 }
 
-/** @function getJumpString
-  * Helper function to get the results of a jump move
-  * as a printable string.
-  * @return {String} A string describing the jump sequence
-  */
-function getJumpString(move) {
-  var jumps = move.landings.map(function(landing) {
-    return String.fromCharCode(97 + landing.x) + "," + landing.y;
-  }).join(' to ');
-  return "jump to " + jumps + " capturing " + move.captures.length + " piece" + ((move.captures.length > 1)?'s':'');
-}
-
-
-/** @function gameLoop
-  * Loops through the players operation of the game itself
-  * prompting input through the command line and calling back to
-  * itself on a turn end or when the user can't make a move or inputs
-  * bad data
-  */
-function gameLoop(){
-
-  // print the board
-  printBoard();
-  // offer instructions
-  console.log(state.turn + "'s turn");
-  rl.question("Pick a piece to move, (letter, number): ", function(answer) {
-    // Figure out what piece the user asked to move
-    var match = /([a-j]),?\s?([0-9])/.exec(answer);
-    if(match) {
-      var x = match[1].toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0);
-      var y = parseInt(match[2]);
-      var piece = state.board[y][x];
-      // Get available moves
-      var moves = getLegalMoves(piece, x, y);
-      if(moves.length === 0) {
-        console.log("\nNo legal moves for ", piece, "at", x, ",", y);
-        gameLoop();
-      } else {
-        // Print available moves
-        console.log("\nAvailable moves for ", match[1] + "," + match[2]);
-        console.log("C. Cancel")
-        moves.forEach(function(move, index) {
-          if(move.type === 'slide') {
-            console.log(index + ". You can slide to " + String.fromCharCode(97 + move.x) + "," + move.y);
-          } else {
-            console.log(index + ". You can " + getJumpString(move));
-          }
-        })
-        //promt the user for a move
-        rl.question("Pick your move from the list:", function(answer){
-          var command = answer.substring(0,1);
-          if(command === 'c' ) gameLoop();
-          command = parseInt(command);
-          if(command === NaN || command >= moves.length) gameLoop();
-          applyMove(x, y, moves[command]);
-          nextTurn();
-          gameLoop();
-        })
+function setup(){
+  var board = document.createElement('section');
+  board.id = 'game-board';
+  document.body.appendChild(board);
+  for (var y = 0; y < state.board.length; y++){
+    for(var x = 0; x < state.board[y].length; x++ ){
+      var square = document.createElement('div');
+      square.id = "square-" + x + "-" + y;
+      square.classList.add('square');
+      if((y + x) % 2 === 1) square.classList.add('black');
+      board.appendChild(square);
+      if(state.board[y][x]) {
+        var checker = document.createElement('div');
+        checker.classList.add('checker');
+        checker.classList.add('checker-' + state.board[y][x]);
+        checker.onclick = handleCheckerClick;
+        square.appendChild(checker);
       }
     }
-  });
+  }
+
 }
 
-
-/** @function main
-  * Entry point to the program.
-  * Starts the checkers game.
-  */
-function main() {
-  gameLoop();
-}
-
-main();
+setup();
